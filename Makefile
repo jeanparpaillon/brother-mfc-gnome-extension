@@ -6,7 +6,7 @@ INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
 SOURCES = $(SRC)/metadata.json $(SRC)/extension.js $(wildcard $(SRC)/schemas/*.gschema.xml)
 
-.PHONY: all pack install uninstall enable disable test shell clean check
+.PHONY: all pack install uninstall enable disable reload reload-clean test shell clean check
 
 all: pack
 
@@ -40,6 +40,13 @@ enable:
 
 disable:
 	./scripts/set-enabled.sh $(UUID) false
+
+# The edit loop in a live session: no logout, no test shell. Needs unsafe mode.
+reload: install
+	./scripts/reload.sh
+
+reload-clean:
+	./scripts/reload.sh --clean
 
 # GNOME Shell cannot be restarted under Wayland, and mutter 50 has no nested
 # backend, so the test loop is a headless shell on its own session bus. It loads

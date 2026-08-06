@@ -14,7 +14,8 @@ package and must be re-checked, not assumed, on any other machine.
 |---|---|
 | GNOME Shell 50.1, gjs 1.88, Adw 1 / GTK 4 | ESM extension (GNOME 45+ style), Adw preferences |
 | mutter 50 ships only `MetaBackendNative`; `gnome-shell --nested` is gone | No nested shell. Test headless on a virtual monitor — [CONTRIBUTING.md](../CONTRIBUTING.md) |
-| Headless shell refuses `Eval` and `Screenshot` over D-Bus | Automated checks read extension *state*; anything visual is confirmed by hand in a real session |
+| `gnome-shell --unsafe-mode` (undocumented in `--help`) enables `org.gnome.Shell.Eval` | Tests can inspect the panel from outside the process; `Screenshot` stays `AccessDenied`, so pixels are still confirmed by hand |
+| A running shell never rescans; gjs caches modules by URI | Live reload only via a throwaway UUID — `make reload`, [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | `brscan-skey` present, `brscan-skey -l` lists the MFC | Detection path exists; `Not responded` in that output is the registration state |
 | `brscan-skey.config` and `script/*.sh` writable by the user, `script/` dir **not** | Can edit in place, cannot add files there |
 | No per-user override for `brscan-skey.config` — `strings` shows only the `/opt` path | Repointing must edit the `/opt` copy |
