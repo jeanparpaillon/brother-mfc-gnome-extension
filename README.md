@@ -4,6 +4,14 @@ Gnome shell extension for Brother MFS printer / scanner
 A gnome extension that provides GUI for configuring and watching Brother MFC
 multifunction printer, leveraging brscan-skey.
 
+Targets GNOME Shell 50. Build and test instructions are in
+[CONTRIBUTING.md](CONTRIBUTING.md); the design and the environment facts it rests
+on are in [docs/design.md](docs/design.md).
+
+```sh
+make install && make enable   # then log out and back in
+```
+
 # Requisites
 
 There is no convenient way for downloading packages from Brother website.

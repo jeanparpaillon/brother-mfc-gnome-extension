@@ -78,8 +78,9 @@ constraints from there bear directly on this project:
 - The systemd user manager is **shared between the sway and GNOME sessions** with
   `Linger=yes`. Nothing this project installs may be wired to
   `graphical-session.target`. See `docs/design.md` §2.4.
-- GNOME Shell cannot be restarted under Wayland; test in a nested shell
-  (`dbus-run-session -- gnome-shell --nested --wayland`).
+- GNOME Shell cannot be restarted under Wayland, and shell 50 has **no nested
+  mode** — `--nested` is gone and mutter 50 ships only the native backend. Test
+  with `make test`, which drives a headless shell; see `CONTRIBUTING.md`.
 
 # Planning a task, then filing it
 

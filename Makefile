@@ -1,0 +1,53 @@
+UUID    = brother-mfc@parpaillon.org
+SRC     = src
+BUILD   = build
+ZIP     = $(BUILD)/$(UUID).shell-extension.zip
+INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
+
+SOURCES = $(SRC)/metadata.json $(SRC)/extension.js $(wildcard $(SRC)/schemas/*.gschema.xml)
+
+.PHONY: all pack install uninstall enable disable test shell clean check
+
+all: pack
+
+# gnome-extensions pack picks up metadata.json, extension.js, prefs.js,
+# stylesheet.css, schemas/ and locale/ from the source directory on its own, and
+# runs glib-compile-schemas over the schemas. Anything else — lib/, scripts/ —
+# has to be named with --extra-source as it appears.
+pack: $(ZIP)
+
+$(ZIP): $(SOURCES) | $(BUILD)
+	gnome-extensions pack --force --out-dir=$(BUILD) $(SRC)
+
+$(BUILD):
+	mkdir -p $(BUILD)
+
+check:
+	glib-compile-schemas --strict --dry-run $(SRC)/schemas/
+
+install: $(ZIP)
+	gnome-extensions install --force $(ZIP)
+
+uninstall:
+	gnome-extensions uninstall $(UUID)
+
+enable:
+	gnome-extensions enable $(UUID)
+
+disable:
+	gnome-extensions disable $(UUID)
+
+# GNOME Shell cannot be restarted under Wayland, and mutter 50 has no nested
+# backend, so the test loop is a headless shell on its own session bus. It loads
+# what `make install` put in ~/.local/share/gnome-shell/extensions/, so install
+# first. See CONTRIBUTING.md.
+test: install
+	./scripts/test-shell.sh
+
+# The same shell, left running to poke at by hand. Nothing is drawn; talk to it
+# with gnome-extensions / gdbus from inside the dbus-run-session.
+shell:
+	dbus-run-session -- gnome-shell --headless --virtual-monitor 1280x720
+
+clean:
+	rm -rf $(BUILD)

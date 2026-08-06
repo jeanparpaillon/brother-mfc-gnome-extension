@@ -1,0 +1,10 @@
+{
+  "uuid": "brother-mfc@parpaillon.org",
+  "name": "Brother MFC",
+  "description": "Configure and watch a Brother MFC multifunction printer/scanner, driven by brscan-skey.",
+  "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.brother-mfc",
+  "gettext-domain": "brother-mfc@parpaillon.org",
+  "url": "https://github.com/jeanparpaillon/brother-mfc-gnome-extension",
+  "version": 1
+}

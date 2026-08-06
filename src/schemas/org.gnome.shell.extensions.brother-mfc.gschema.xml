@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="brother-mfc@parpaillon.org">
+  <schema id="org.gnome.shell.extensions.brother-mfc"
+          path="/org/gnome/shell/extensions/brother-mfc/">
+    <!-- Keys are added by the workstreams that need them. The schema exists from
+         the skeleton on because metadata.json declares settings-schema, and
+         getSettings() aborts enable() if the schema is not in the search path. -->
+  </schema>
+</schemalist>
