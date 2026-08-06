@@ -2,3 +2,4 @@
 /build/
 *.shell-extension.zip
 schemas/gschemas.compiled
+/.shellsrc/

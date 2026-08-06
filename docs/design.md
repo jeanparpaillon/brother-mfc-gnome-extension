@@ -17,6 +17,8 @@ package and must be re-checked, not assumed, on any other machine.
 | `gnome-shell --unsafe-mode` (undocumented in `--help`) enables `org.gnome.Shell.Eval` | Tests can inspect the panel from outside the process; `Screenshot` stays `AccessDenied`, so pixels are still confirmed by hand |
 | A running shell never rescans; gjs caches modules by URI | Live reload only via a throwaway UUID — `make reload`, [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | `brscan-skey` present, `brscan-skey -l` lists the MFC | Detection path exists; `Not responded` in that output is the registration state |
+| `/usr/bin/brscan-skey` is a symlink into `/opt/brother/scanner/brscan-skey/` | Probe both: the wrapper on its own is a broken install, and a dangling symlink must not read as "installed" |
+| The SANE driver is a **separate package** — `brscan4` here, `brscan5` for other model ranges — shipping `/usr/lib64/sane/libsane-brother4.so` (`dpkg -L brscan4`), not the multiarch directory | That literal path can be probed without guessing an architecture triplet; brscan-skey without it lists no device, for a reason that has nothing to do with the key daemon |
 | `brscan-skey.config` and `script/*.sh` writable by the user, `script/` dir **not** | Can edit in place, cannot add files there |
 | No per-user override for `brscan-skey.config` — `strings` shows only the `/opt` path | Repointing must edit the `/opt` copy |
 | Stock scripts source `~/.brscan-skey/scanto*.config` first, `/etc/opt/...` second | Per-user scan config is natively supported, no root needed |
@@ -86,6 +88,34 @@ This loses per-action behaviour — all four actions write the same
 `brscan_<timestamp>.tif` pattern into that one directory, so the trigger cannot be
 recovered — but it still delivers XDG output paths and notifications. It is a
 fallback, not a design goal.
+
+### §2.6 — "Not installed" is a UI state, not an error path
+
+The packages are behind a per-model web form and cannot be installed from a
+repository (`README.md`), so the extension can never fix a missing install — the
+most it can do is name what is absent and open
+<https://support.brother.com/g/b/downloadtop.aspx>.
+
+That makes the absent case a screen the extension is expected to draw, not an
+exception to log. An empty or greyed-out menu is indistinguishable from an
+extension that is broken, so when anything is missing the menu holds *only* the
+explanation and the download item: no dead device list, no service toggle.
+
+The explanation names the piece that is actually absent, because the three
+failures need three different actions from the user: the `brscan-skey` package,
+its `/opt` tree (present but broken — an interrupted install or a rename), and
+the `brscan4`/`brscan5` SANE driver, which is a different download from the same
+page. `lib/skey.js` reports them separately for that reason.
+
+Detection runs at `enable()` and again on every menu open — installing the
+package is then noticed without logging out — with the menu rebuilt only when
+the answer changed. Every probe is `query_info_async`: both callers are on the
+compositor thread.
+
+`$BROTHER_MFC_ROOT` prefixes every probed path. It exists for the tests, which
+would otherwise need `sudo` to move a root-owned `/opt` tree out of the way, and
+would break scanning on the machine while they ran. Unset in a normal session;
+see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## §3 — Layout
 

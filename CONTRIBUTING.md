@@ -76,9 +76,13 @@ Two things to expect: the reloaded copy shows up under a different UUID (its
 real UUID stays unloaded until the next login.
 
 `gnome-extensions pack` picks up `metadata.json`, `extension.js`, `prefs.js`,
-`stylesheet.css`, `schemas/` and `locale/` on its own; anything else — `lib/`,
-`scripts/` — has to be added to the `pack` line in the [Makefile](Makefile) with
-`--extra-source` when it appears. The `.zip` carries only the `.gschema.xml`;
+`stylesheet.css`, `schemas/` and `locale/` on its own; anything else has to be added
+to the `pack` line in the [Makefile](Makefile) with `--extra-source` when it
+appears. `lib/` is there already; `scripts/` will need the same treatment. Check
+after adding one — a missing `--extra-source` produces an extension that installs
+cleanly and then fails at `enable()` on the import.
+
+The `.zip` carries only the `.gschema.xml`;
 `gnome-extensions install` is what runs `glib-compile-schemas`, so
 `schemas/gschemas.compiled` shows up in the installed copy and never in the build
 output.
@@ -96,7 +100,7 @@ Failed to configure: Option inconnue --nested
 ```
 
 `--nested` was dropped because mutter's nested backend was the *X11* backend, and
-mutter 50 ships only `MetaBackendNative` — `strings libmutter-14-0.so` finds no other
+mutter 50 ships only `MetaBackendNative` — `strings libmutter-18.so.0` finds no other
 `MetaBackend*` type, and `--display-server` survives in `--help` only as a leftover
 ("Run as a full display server, rather than nested"). Running `gnome-shell --wayland`
 without it does **not** fall back to nested; it goes straight for the seat and dies:
@@ -121,8 +125,9 @@ make install && make test
 ```
 
 It starts the headless shell, enables the extension, cycles it disabled/enabled twice
-and asserts the state stays `ACTIVE`, checks the indicator through `Eval`, then greps
-the shell log for the UUID.
+and asserts the state stays `ACTIVE`, checks the indicator through `Eval`, walks the
+extension through each brscan-skey install state and asserts the menu it produces,
+then greps the shell log for the UUID.
 
 The shell is started with **`--unsafe-mode`**, a mutter option that `gnome-shell
 --help` does not list. It is what makes `org.gnome.Shell.Eval` answer instead of
@@ -151,6 +156,23 @@ Two things to know about the signals it uses:
   and the state to `ERROR`. Anything added to `enable()` from here on should be
   matched by a teardown in `disable()` that this cycle would notice.
 
+### Faking the brscan-skey install
+
+`lib/skey.js` takes every path it probes relative to **`$BROTHER_MFC_ROOT`** when
+that is set, so `make test` points the extension at throwaway trees under a
+`mktemp -d` instead of at the real install. The real one is root-owned, and the
+alternative — moving `/opt/brother/scanner/brscan-skey` aside to see the
+missing-package menu — needs `sudo` and stops scanning working while the test runs.
+
+The trees cover the states that produce different menus: everything present,
+nothing present, brscan-skey without the `brscan4`/`brscan5` driver, and the `/opt`
+tree renamed away with `/usr/bin/brscan-skey` left behind. Between them the test
+only calls `GLib.setenv` through `Eval` and reopens the menu — no disable/enable —
+because re-detecting on menu open is itself the thing being checked.
+
+The variable is unset everywhere else, including `make shell` and a real session,
+so what you get by hand is the real install.
+
 Other things worth knowing:
 
 - The shell scans the extension directory at startup, so **`make install` before
@@ -164,3 +186,46 @@ Other things worth knowing:
   finds. Run it *inside* the `dbus-run-session`, or it silently falls back to the
   standalone `org.gnome.Shell.Extensions` service and reports
   "Erreur lors de la connexion à Shell de GNOME".
+
+## Reading the shell's own sources: `make shellsrc`
+
+There is no local copy of the API this extension is written against, and nothing to
+grep: **none of it is installed as files.**
+
+```sh
+make shellsrc   # unpacks into .shellsrc/ (gitignored)
+```
+
+Three things land there, from three different places:
+
+| `.shellsrc/` | What | Where it comes from |
+| --- | --- | --- |
+| `js/` | The shell's own JavaScript — `ui/panel.js`, `ui/panelMenu.js`, `ui/popupMenu.js`, `extensions/extension.js` | GResource inside `libshell-18.so` |
+| `gjs/` | The gjs overrides — `core/overrides/Gio.js` is where `promisify` lives | GResource inside `libgjs.so.0` |
+| `gir/` | `St`, `Shell`, `Clutter`, `Meta`, `Mtk`, `Cogl` — the C-side classes with their properties, signals and signatures | `.typelib` decompiled with `g-ir-generate` |
+
+After that the ordinary tools work: `grep -rn addToStatusArea .shellsrc/js` lands on
+`ui/panel.js:712`, the function in the traceback above.
+
+The parts worth knowing, because each one wastes an afternoon on its own:
+
+- **`gresource list /usr/bin/gnome-shell` returns nothing.** The binary is a 31 kB
+  stub; the JS is linked into `/usr/lib/gnome-shell/libshell-<n>.so`. Nothing under
+  `/usr/share/gnome-shell/*.gresource` holds it either — those are themes, icons,
+  D-Bus interfaces, and the `src` bundles of the *satellite* apps (`org.gnome.Shell.
+  Extensions`, `org.gnome.ScreenSaver`), not of the shell.
+- **Grepping the binaries for a resource path finds nothing**, because gresource
+  bundles are compressed. `gresource list` is the only way to see inside one.
+- **The soname carries the shell version, not the library's own**: shell 50 is
+  `libshell-18.so`, `Clutter-18.typelib`, `/usr/lib/x86_64-linux-gnu/mutter-18/`.
+  [scripts/shellsrc.sh](scripts/shellsrc.sh) reads all of these out of
+  `ldd /usr/bin/gnome-shell` rather than naming them, so a shell upgrade does not
+  silently produce an empty tree.
+- **There are no `.gir` files on this machine** — no `-dev` packages — only binary
+  `.typelib`, and they are *outside* the girepository search path, in
+  `/usr/lib/gnome-shell` and mutter's private directory. `g-ir-generate` resolves
+  each typelib's dependencies as it runs, so both directories have to be passed as
+  `--includedir` or it aborts on `Typelib file for namespace 'Meta' not found`.
+
+`.shellsrc/` is a cache of what is installed, so it is gitignored and rebuilt from
+scratch each run. Regenerate it after a shell upgrade; `make clean` drops it.

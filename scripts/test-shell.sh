@@ -20,12 +20,42 @@ FAILED=0
 
 state() { gnome-extensions info "$UUID" 2>/dev/null | sed -n 's/^ *\(State\|État\): *//p'; }
 
+# The install lib/skey.js probes is taken relative to $BROTHER_MFC_ROOT, so the
+# extension is pointed at fake trees here rather than at the real /opt: that one
+# is root-owned, and renaming it out of the way to see the missing-package menu
+# would need sudo and would break scanning while the test runs.
+ROOTS=$(mktemp -d -t brother-mfc-roots-XXXXXX)
+
+# Everything there: the wrapper, the /opt tree, and the brscan4 driver with its
+# SANE module at the path the Brother package owns.
+mkdir -p "$ROOTS/present/usr/bin" \
+         "$ROOTS/present/opt/brother/scanner/brscan-skey" \
+         "$ROOTS/present/opt/brother/scanner/brscan4" \
+         "$ROOTS/present/usr/lib64/sane"
+touch "$ROOTS/present/usr/bin/brscan-skey" \
+      "$ROOTS/present/usr/lib64/sane/libsane-brother4.so"
+
+mkdir -p "$ROOTS/absent"
+
+# brscan-skey installed, no scanner driver — the case the issue calls out: the
+# two come from the same download page but are not the same package.
+cp -a "$ROOTS/present" "$ROOTS/no-driver"
+rm -rf "$ROOTS/no-driver/opt/brother/scanner/brscan4" "$ROOTS/no-driver/usr/lib64"
+
+# The /opt tree renamed away with the wrapper left behind — a broken install,
+# which must not read as "not installed".
+cp -a "$ROOTS/present" "$ROOTS/no-opt"
+mv "$ROOTS/no-opt/opt/brother/scanner/brscan-skey" \
+   "$ROOTS/no-opt/opt/brother/scanner/brscan-skey.away"
+
+export BROTHER_MFC_ROOT="$ROOTS/present"
+
 # --unsafe-mode is a mutter option that gnome-shell --help does not list. It is
 # what makes org.gnome.Shell.Eval answer, and Eval is the only way to look at the
 # panel: headless draws nothing and Screenshot returns AccessDenied.
 gnome-shell --headless --unsafe-mode --virtual-monitor 1280x720 >"$LOG" 2>&1 &
 SHELL_PID=$!
-trap 'kill $SHELL_PID 2>/dev/null' EXIT
+trap 'kill $SHELL_PID 2>/dev/null; rm -rf "$ROOTS"' EXIT
 
 if ! gdbus wait --session --timeout 60 org.gnome.Shell; then
     echo "shell never claimed org.gnome.Shell; log follows" >&2
@@ -85,6 +115,77 @@ case "$flat" in
     *'"menuOpen":true'*) ;;
     *) fail "menu did not open" ;;
 esac
+
+# --- detection -------------------------------------------------------------
+# Detection re-runs on every menu open, so a state change is applied by closing
+# and reopening the menu — no disable/enable, which is the point: installing the
+# package must not need a logout.
+
+# Reads what is on screen now. No detect() of its own: the rebuild has to have
+# happened by itself, on the open above.
+read_menu() {
+    p=$(ev "const i = Main.panel.statusArea['$UUID'];
+        JSON.stringify({
+            missing: i._state.missing,
+            labels: i.menu._getMenuItems().map(m => m.label ? m.label.text : ''),
+        })")
+    echo "${p//\\/}"
+}
+
+set_root() { ev "GLib.setenv('BROTHER_MFC_ROOT', '$1', true); true" >/dev/null; }
+
+reopen() {
+    ev "const i = Main.panel.statusArea['$UUID'];
+        i.menu.close(false); i.menu.open(false); true" >/dev/null
+    sleep 1.5
+}
+
+# expect <what> <haystack> <needle>
+expect() {
+    case "$2" in
+        *"$3"*) ;;
+        *) fail "$1: expected '$3' in $2" ;;
+    esac
+}
+reject() {
+    case "$2" in
+        *"$3"*) fail "$1: did not expect '$3' in $2" ;;
+    esac
+}
+
+m=$(read_menu)
+echo "menu (present): $m"
+expect "present" "$m" '"missing":[]'
+expect "present" "$m" 'No devices yet'
+
+set_root "$ROOTS/absent"; reopen
+m=$(read_menu)
+echo "menu (absent): $m"
+expect "absent" "$m" '"missing":["tool","opt","backend"]'
+expect "absent" "$m" 'not installed'
+expect "absent" "$m" 'Get it from Brother'
+reject "absent" "$m" 'No devices yet'
+
+set_root "$ROOTS/no-driver"; reopen
+m=$(read_menu)
+echo "menu (no driver): $m"
+expect "no driver" "$m" '"missing":["backend"]'
+expect "no driver" "$m" 'brscan4 or brscan5'
+expect "no driver" "$m" 'Get it from Brother'
+
+set_root "$ROOTS/no-opt"; reopen
+m=$(read_menu)
+echo "menu (no /opt tree): $m"
+expect "no /opt tree" "$m" '"missing":["opt"]'
+expect "no /opt tree" "$m" '/opt/brother/scanner/brscan-skey is missing'
+
+# Back to a good install, without ever disabling the extension.
+set_root "$ROOTS/present"; reopen
+m=$(read_menu)
+echo "menu (restored): $m"
+expect "restored" "$m" '"missing":[]'
+expect "restored" "$m" 'No devices yet'
+reject "restored" "$m" 'Get it from Brother'
 
 if grep -q "$UUID" "$LOG"; then
     echo "--- shell complained about $UUID ---" >&2

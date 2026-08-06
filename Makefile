@@ -4,9 +4,10 @@ BUILD   = build
 ZIP     = $(BUILD)/$(UUID).shell-extension.zip
 INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
-SOURCES = $(SRC)/metadata.json $(SRC)/extension.js $(wildcard $(SRC)/schemas/*.gschema.xml)
+SOURCES = $(SRC)/metadata.json $(SRC)/extension.js $(wildcard $(SRC)/lib/*.js) \
+          $(wildcard $(SRC)/schemas/*.gschema.xml)
 
-.PHONY: all pack install uninstall enable disable reload reload-clean test shell clean check
+.PHONY: all pack install uninstall enable disable reload reload-clean test shell clean check shellsrc
 
 all: pack
 
@@ -17,7 +18,7 @@ all: pack
 pack: $(ZIP)
 
 $(ZIP): $(SOURCES) | $(BUILD)
-	gnome-extensions pack --force --out-dir=$(BUILD) $(SRC)
+	gnome-extensions pack --force --extra-source=lib --out-dir=$(BUILD) $(SRC)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -60,5 +61,10 @@ test: install
 shell:
 	dbus-run-session -- gnome-shell --headless --virtual-monitor 1280x720
 
+# Unpack the shell's own JS and the shell-side GIRs into .shellsrc/ to read and
+# grep. None of it ships as files — see CONTRIBUTING.md.
+shellsrc:
+	./scripts/shellsrc.sh
+
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD) .shellsrc

@@ -82,6 +82,15 @@ constraints from there bear directly on this project:
   mode** — `--nested` is gone and mutter 50 ships only the native backend. Test
   with `make test`, which drives a headless shell; see `CONTRIBUTING.md`.
 
+# Looking up the shell API
+
+Nothing this extension calls is installed as readable files — the shell's JS is a
+GResource inside `libshell-18.so`, and the C-side classes ship only as binary
+`.typelib`. **Run `make shellsrc` and grep `.shellsrc/`** (`js/` for `ui/panel.js`
+and friends, `gjs/` for the `promisify` overrides, `gir/` for `St`/`Clutter`/
+`Shell`/`Meta`) instead of guessing an API or extracting resources by hand. It is
+gitignored and rebuilt in one command; see `CONTRIBUTING.md`.
+
 # Planning a task, then filing it
 
 Two steps, deliberately separate:
