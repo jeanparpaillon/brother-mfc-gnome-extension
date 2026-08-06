@@ -187,6 +187,59 @@ Other things worth knowing:
   standalone `org.gnome.Shell.Extensions` service and reports
   "Erreur lors de la connexion à Shell de GNOME".
 
+## Testing the unit: `make test-systemd`
+
+`dbus-run-session` gives the headless shell a bus of its own, and **systemd is not
+on it**:
+
+```
+$ dbus-run-session -- gjs -m scripts/systemd-probe.js state
+cannot reach systemd: org.freedesktop.systemd1 is not on the session bus
+```
+
+So `make test` proves only that the extension survives that. A systemd user manager
+is a requirement, not something to work around — but an exception out of `enable()`
+would take the whole extension down, so a bus without systemd reads as an error in
+the menu and nothing more. Everything else about `brscan-skey.service` is checked by
+[scripts/test-systemd.sh](scripts/test-systemd.sh), outside any shell:
+
+```sh
+make test-systemd
+```
+
+It drives [src/lib/systemd.js](src/lib/systemd.js) — the same code the extension
+runs — through [scripts/systemd-probe.js](scripts/systemd-probe.js), a plain gjs
+entry point, and reads the result back with `systemctl`. That is why nothing in
+`src/lib/systemd.js` or `src/lib/unit.js` imports
+`resource:///org/gnome/shell/…`: those two modules have to load outside the shell,
+and it is why the unit text lives in `lib/unit.js` rather than beside the rest of
+the brscan-skey knowledge in `lib/skey.js`, which imports the shell for gettext.
+
+It checks that the unit is generated only when its content changed, that it stays
+`static` with empty `WantedBy`/`RequiredBy` and no `.wants` symlink even after
+`systemctl --user enable`, that `enable()` starts it and `disable()` stops it, that
+a unit somebody *else* started is left alone, that a `SIGKILL` is followed by a
+restart, and that a failed start is reported with its `Result`.
+
+**It starts and stops the real service**, and refuses to run if the unit is
+already active — ownership is half of what it tests and cannot be read off a unit
+someone else started. It also creates and removes a throwaway
+`brother-mfc-failtest.service`, because provoking a failure on the real unit would
+leave the scanner broken behind it.
+
+Two systemd behaviours it pins down, both different from what the older
+documentation describes:
+
+- `systemctl --user enable` on a unit with no `[Install]` **does not fail** on
+  systemd 259. It prints "the unit files have no installation config" and exits 0.
+  What matters is that it writes no symlink, so the assertion is on
+  `UnitFileState=static`, not on the exit status.
+- **Hitting the start limit does not set `Result=start-limit-hit`** there either.
+  `StartUnit` still returns a job, `Result` keeps the underlying cause
+  (`exit-code`), and only the journal says "Start request repeated too quickly".
+  That is why the menu offers the `journalctl --user -u brscan-skey.service`
+  invocation instead of trying to spell the whole diagnosis into a label.
+
 ## Reading the shell's own sources: `make shellsrc`
 
 There is no local copy of the API this extension is written against, and nothing to

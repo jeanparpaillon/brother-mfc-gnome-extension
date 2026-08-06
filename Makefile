@@ -7,7 +7,7 @@ INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 SOURCES = $(SRC)/metadata.json $(SRC)/extension.js $(wildcard $(SRC)/lib/*.js) \
           $(wildcard $(SRC)/schemas/*.gschema.xml)
 
-.PHONY: all pack install uninstall enable disable reload reload-clean test shell clean check shellsrc
+.PHONY: all pack install uninstall enable disable reload reload-clean test test-systemd shell clean check shellsrc
 
 all: pack
 
@@ -55,6 +55,13 @@ reload-clean:
 # first. See CONTRIBUTING.md.
 test: install
 	./scripts/test-shell.sh
+
+# The other half of the test story: dbus-run-session gives the headless shell a
+# bus with no systemd on it, so `make test` can only prove the extension
+# survives that. This drives lib/systemd.js against the real user manager,
+# outside any shell. It starts and stops brscan-skey.service for real.
+test-systemd:
+	./scripts/test-systemd.sh
 
 # The same shell, left running to poke at by hand. Nothing is drawn; talk to it
 # with gnome-extensions / gdbus from inside the dbus-run-session.

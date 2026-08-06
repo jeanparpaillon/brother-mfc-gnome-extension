@@ -79,6 +79,25 @@ section at all**, and the extension drives it with `StartUnit` / `StopUnit` over
 path by which the unit can leak into the sway session. The extension's own lifecycle
 *is* the GNOME session lifecycle, which is exactly the scope wanted.
 
+Three consequences, none of them obvious:
+
+- **The extension declares `session-modes: ["user", "unlock-dialog"]`.** Without it
+  the shell disables the extension on lock and enables it on unlock, so locking the
+  screen would stop the scan key daemon — and the printer's buttons are the
+  interface (§2.3). The unit outliving the lock screen is the point.
+- **A unit that was already running is not ours to stop.** `enable()` starts it only
+  from a non-active state and remembers that it did; `disable()` stops it only then.
+  Otherwise disabling the extension would take down a daemon somebody started by
+  hand.
+- **`systemctl --user enable` does not fail on systemd 259** — it prints "the unit
+  files have no installation config" and exits 0, writing nothing. The guarantee is
+  therefore `UnitFileState=static` and an empty `WantedBy`, not an error exit; see
+  [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+Unit state reaches the menu over `PropertiesChanged` on the unit object, which
+systemd emits only while a client holds `Manager.Subscribe()` — so the extension
+calls it, and nothing polls.
+
 ### §2.5 — Degraded mode
 
 If `brscan-skey.config` cannot be written at all: leave the stock scripts alone and
@@ -126,6 +145,7 @@ brother-mfc@parpaillon.org/
   lib/skey.js           brscan-skey -l parsing, install detection, config rewrite
   lib/config.js         GSettings -> ~/.brscan-skey/*.config generation
   lib/systemd.js        org.freedesktop.systemd1 client
+  lib/unit.js           the generated brscan-skey.service
   schemas/org.gnome.shell.extensions.brother-mfc.gschema.xml
   scripts/scanto{image,file,email,ocr}.sh   installed to ~/.local/share/brother-mfc/
   metadata.json         shell-version: ["50"]

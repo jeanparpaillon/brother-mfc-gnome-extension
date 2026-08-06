@@ -157,6 +157,10 @@ m=$(read_menu)
 echo "menu (present): $m"
 expect "present" "$m" '"missing":[]'
 expect "present" "$m" 'No devices yet'
+# There is no systemd on a dbus-run-session bus, and that is the one thing about
+# the unit this shell can prove: the extension reports it and stays ACTIVE
+# instead of throwing out of enable(). The rest is make test-systemd.
+expect "present" "$m" 'Scan key service: cannot reach systemd'
 
 set_root "$ROOTS/absent"; reopen
 m=$(read_menu)
