@@ -28,23 +28,23 @@ function report(unit, phase) {
         `error=${unit.error ?? ''}`);
 }
 
-/* Resolves when the unit reaches one of `states`, driven by ::changed — the
- * same signal the menu is driven by, so a hang here is a real bug and not a
+/* Resolves when the unit reaches one of `states`, driven by the same change
+ * notification the menu is driven by, so a hang here is a real bug and not a
  * missing poll. */
 function waitFor(unit, states) {
     if (states.includes(unit.activeState))
         return Promise.resolve();
 
     return new Promise((resolve, reject) => {
-        const id = unit.connect('changed', () => {
+        const listener = unit.addListener(() => {
             if (!states.includes(unit.activeState))
                 return;
-            unit.disconnect(id);
+            unit.removeListener(listener);
             GLib.source_remove(timeout);
             resolve();
         });
         const timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, TIMEOUT_MS, () => {
-            unit.disconnect(id);
+            unit.removeListener(listener);
             reject(new Error(`timed out waiting for ${states} (still ${unit.activeState})`));
             return GLib.SOURCE_REMOVE;
         });

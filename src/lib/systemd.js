@@ -13,7 +13,6 @@
 
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
-import GObject from 'gi://GObject';
 
 const SYSTEMD_NAME = 'org.freedesktop.systemd1';
 const SYSTEMD_PATH = '/org/freedesktop/systemd1';
@@ -49,20 +48,20 @@ function callAsync(obj, startMethod, finishMethod, args) {
 /**
  * A systemd user unit this extension owns: the file it is generated into, and
  * the manager calls that drive it.
+ *
+ * Deliberately **not** a GObject, so state changes are reported to plain
+ * listeners rather than over a signal. gjs derives a GType name from the last
+ * two components of the module path — `lib/systemd.js` gives
+ * `Gjs_lib_systemd_Unit`, with nothing in it from the extension directory — so a
+ * registered class here would collide with itself the second time `make reload`
+ * loads the extension under a throwaway UUID into the same shell process.
  */
-export class Unit extends GObject.Object {
-    static {
-        GObject.registerClass({
-            Signals: {'changed': {}},
-        }, this);
-    }
-
+export class Unit {
     /**
      * @param {string} name unit name, e.g. 'brscan-skey.service'
      */
     constructor(name) {
-        super();
-
+        this._listeners = new Set();
         this._name = name;
         this._file = Gio.File.new_for_path(GLib.build_filenamev(
             [GLib.get_user_config_dir(), 'systemd', 'user', name]));
@@ -77,6 +76,22 @@ export class Unit extends GObject.Object {
         this._result = '';
         this._error = null;
         this._startedByUs = false;
+    }
+
+    /**
+     * @param {Function} fn called with no arguments whenever the state moves
+     * @returns {Function} the same function, to hand back to removeListener()
+     */
+    addListener(fn) {
+        this._listeners.add(fn);
+        return fn;
+    }
+
+    /**
+     * @param {Function} fn as returned by addListener()
+     */
+    removeListener(fn) {
+        this._listeners.delete(fn);
     }
 
     get name() {
@@ -231,8 +246,14 @@ export class Unit extends GObject.Object {
             this._bus.signal_unsubscribe(this._propsId);
             this._propsId = 0;
         }
+        this._listeners.clear();
         this._bus = null;
         this._unitPath = null;
+    }
+
+    _emit() {
+        for (const fn of [...this._listeners])
+            fn();
     }
 
     async _readUnit() {
@@ -292,12 +313,12 @@ export class Unit extends GObject.Object {
     _fail(message) {
         this._error = message;
         if (!this._update(UNAVAILABLE, '', ''))
-            this.emit('changed');
+            this._emit();
     }
 
     _setError(message) {
         this._error = message;
-        this.emit('changed');
+        this._emit();
     }
 
     /**
@@ -311,7 +332,7 @@ export class Unit extends GObject.Object {
         this._activeState = activeState;
         this._subState = subState;
         this._result = result;
-        this.emit('changed');
+        this._emit();
         return true;
     }
 }

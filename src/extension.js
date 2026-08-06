@@ -186,7 +186,7 @@ export default class BrotherMFCExtension extends Extension {
 
         this._cancellable = new Gio.Cancellable();
         this._unit = new Unit(UNIT_NAME);
-        this._unit.connectObject('changed', () => this._sync(), this);
+        this._onUnitChanged = this._unit.addListener(() => this._sync());
 
         this._queue(() => this._startService());
     }
@@ -203,7 +203,8 @@ export default class BrotherMFCExtension extends Extension {
         if (!unit)
             return;
 
-        unit.disconnectObject(this);
+        unit.removeListener(this._onUnitChanged);
+        this._onUnitChanged = null;
         // Stopping is a D-Bus round trip, so it outlives disable() — but it
         // holds nothing from the shell, and _queue() keeps it ordered against
         // the next enable() rather than racing it.
