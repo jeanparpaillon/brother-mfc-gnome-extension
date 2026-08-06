@@ -13,7 +13,28 @@ ends up in `~/.local/share/gnome-shell/extensions/brother-mfc@parpaillon.org/`.
 ```sh
 make install   # pack src/ and install into ~/.local/share/gnome-shell/extensions/
 make enable
+# log out and back in
 ```
+
+**A running shell will not load a newly installed extension**, and there is no way
+to make it rescan — it reads the extension directories once at startup, and
+`ReloadExtension` over D-Bus answers `NotSupported: ReloadExtension is deprecated
+and does not work`. Under Wayland that means a full log out / log in; there is no
+`Alt+F2 r`.
+
+That is also why `make enable` does not run `gnome-extensions enable`. That command
+asks the running shell, which has never heard of what `make install` just unzipped:
+
+```
+$ gnome-extensions enable brother-mfc@parpaillon.org
+L'extension « brother-mfc@parpaillon.org » n'existe pas
+```
+
+[scripts/set-enabled.sh](scripts/set-enabled.sh) writes the `enabled-extensions`
+GSetting directly instead. That is the same key the shell reads at startup, so it
+works before the shell knows the extension exists, and a shell that *does* already
+know it applies the change live — it watches that key. The script reads the value
+back afterwards and fails if the change did not stick.
 
 `gnome-extensions pack` picks up `metadata.json`, `extension.js`, `prefs.js`,
 `stylesheet.css`, `schemas/` and `locale/` on its own; anything else — `lib/`,

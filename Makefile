@@ -31,11 +31,15 @@ install: $(ZIP)
 uninstall:
 	gnome-extensions uninstall $(UUID)
 
+# Not `gnome-extensions enable`: that goes through the running shell, which only
+# scans the extension directories at startup and so has never heard of what
+# `make install` just unzipped. See scripts/set-enabled.sh.
 enable:
-	gnome-extensions enable $(UUID)
+	./scripts/set-enabled.sh $(UUID) true
+	@echo "Log out and back in — a running shell will not load a newly installed extension."
 
 disable:
-	gnome-extensions disable $(UUID)
+	./scripts/set-enabled.sh $(UUID) false
 
 # GNOME Shell cannot be restarted under Wayland, and mutter 50 has no nested
 # backend, so the test loop is a headless shell on its own session bus. It loads
