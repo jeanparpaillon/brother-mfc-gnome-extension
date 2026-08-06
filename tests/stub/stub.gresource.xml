@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The shell's own JS lives at these resource paths and is not on disk. This
+     bundle puts a stub at the one path lib/skey.js imports, so the unit tests
+     can load it without a running shell. See tests/run.js. -->
+<gresources>
+  <gresource prefix="/org/gnome/shell/extensions">
+    <file>extension.js</file>
+  </gresource>
+</gresources>

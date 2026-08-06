@@ -7,7 +7,9 @@ INSTALL_DIR = $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 SOURCES = $(SRC)/metadata.json $(SRC)/extension.js $(wildcard $(SRC)/lib/*.js) \
           $(wildcard $(SRC)/schemas/*.gschema.xml)
 
-.PHONY: all pack install uninstall enable disable reload reload-clean test test-systemd shell clean check shellsrc
+STUB    = $(BUILD)/stub.gresource
+
+.PHONY: all pack install uninstall enable disable reload reload-clean test test-systemd unit shell clean check shellsrc
 
 all: pack
 
@@ -53,7 +55,7 @@ reload-clean:
 # backend, so the test loop is a headless shell on its own session bus. It loads
 # what `make install` put in ~/.local/share/gnome-shell/extensions/, so install
 # first. See CONTRIBUTING.md.
-test: install
+test: unit install
 	./scripts/test-shell.sh
 
 # The other half of the test story: dbus-run-session gives the headless shell a
@@ -62,6 +64,16 @@ test: install
 # outside any shell. It starts and stops brscan-skey.service for real.
 test-systemd:
 	./scripts/test-systemd.sh
+	
+# The pure functions in lib/, in plain gjs — no shell, no hardware. The bundle
+# stands in for resource:///org/gnome/shell/extensions/extension.js, which every
+# lib/ module imports and which exists only inside gnome-shell.
+unit: $(STUB)
+	gjs -m tests/run.js
+
+$(STUB): tests/stub/stub.gresource.xml tests/stub/extension.js | $(BUILD)
+	glib-compile-resources --sourcedir=tests/stub --target=$@ \
+	    tests/stub/stub.gresource.xml
 
 # The same shell, left running to poke at by hand. Nothing is drawn; talk to it
 # with gnome-extensions / gdbus from inside the dbus-run-session.
